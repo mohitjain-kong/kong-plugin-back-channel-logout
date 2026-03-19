@@ -1,0 +1,75 @@
+version: "3.8"
+
+services:
+  kong:
+    image: kong:latest
+    container_name: kong
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+      - "8001:8001"
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-db
+      KONG_PG_PORT: 5432
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong
+      KONG_ADMIN_API_URI: http://0.0.0.0:8001
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_PLUGINS: bundled,back-channel-logout # Ensure your plugin is loaded
+      KONG_PLUGINSERVER_NAMES: back-channel-logout #Define the plugin server name
+      KONG_PLUGINSERVER_BACK_CHANNEL_LOGOUT_COMMAND: /opt/kong/plugins/back-channel-logout/bin/server.sh #Specify the start command
+      KONG_PLUGINSERVER_BACK_CHANNEL_LOGOUT_TIMEOUT: 5 #Specify a reasonable timeout
+      KONG_PLUGINSERVER_BACK_CHANNEL_LOGOUT_START_TIMEOUT: 5 #Specify a reasonable startup timeout
+      KONG_REDIS_HOST: redis
+      KONG_REDIS_PORT: 6379
+    depends_on:
+      - kong-db
+      - redis
+    networks:
+      - kong-net
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
+  kong-db:
+    image: postgres:15
+    container_name: kong-db
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_DB: kong
+      POSTGRES_PASSWORD: kong
+    ports:
+      - "5432:5432"
+    volumes:
+      - kong_data:/var/lib/postgresql/data
+    networks:
+      - kong-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - kong-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  kong-net:
+    driver: bridge
+
+volumes:
+  kong_data: {}

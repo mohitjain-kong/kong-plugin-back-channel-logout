@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install LuaRocks
+        run: sudo apt-get install -y luarocks
+
+      - name: Tag, patch rockspec, and pack source rock
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          ORIGIN=$(git remote get-url origin | sed 's|\.git$||')
+          REPO_BASENAME=$(basename "${ORIGIN}")
+          ARCHIVE_URL="${ORIGIN}/archive/refs/tags/v1.0.0.tar.gz"
+          sed -i "s|url = \"[^\"]*\"|url = \"${ARCHIVE_URL}\"|g" kong-plugin-back-channel-logout-1.0.0-1.rockspec
+          sed -i "s|dir = \"[^\"]*\"|dir = \"${REPO_BASENAME}-1.0.0\"|g" kong-plugin-back-channel-logout-1.0.0-1.rockspec
+          git tag -f v1.0.0
+          git push origin v1.0.0 --force
+          echo "header = \"Authorization: Bearer ${GITHUB_TOKEN}\"" > ~/.curlrc
+          luarocks pack kong-plugin-back-channel-logout-1.0.0-1.rockspec
+          rm -f ~/.curlrc
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.0
+          generate_release_notes: true
+          files: "*.src.rock"

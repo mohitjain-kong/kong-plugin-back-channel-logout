@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Pongo Integration Tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Pongo
+        run: |
+          git clone https://github.com/Kong/kong-pongo.git ~/.kong-pongo
+          mkdir -p ~/.local/bin
+          ln -s ~/.kong-pongo/pongo.sh ~/.local/bin/pongo
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Start Kong with plugin
+        run: pongo up
+
+      - name: Run unit tests
+        run: pongo run spec/unit/
+
+      - name: Run integration tests
+        run: pongo run spec/integration/
+
+      - name: Tear down
+        if: always()
+        run: pongo down
